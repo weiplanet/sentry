@@ -250,14 +250,35 @@ class HealthChart extends React.Component<Props> {
           seriesOptions={{
             showSymbol: false,
           }}
-          grid={{
-            left: '10px',
-            right: '10px',
-            top: '40px',
-            bottom: '0px',
-          }}
-          yAxis={this.configureYAxis()}
-          xAxis={this.configureXAxis()}
+          grid={[
+            {
+              left: '10px',
+              right: '10px',
+              top: '40px',
+              bottom: '0px',
+            },
+            {
+              left: '10px',
+              right: '10px',
+              top: '40px',
+              bottom: '0px',
+            },
+          ]}
+          xAxes={[
+            {gridIndex: 0, type: 'time', show: false},
+            {gridIndex: 1, type: 'time'},
+          ]}
+          yAxes={[
+            {
+              ...this.configureYAxis(),
+              gridIndex: 0,
+              show: false,
+              axisLabel: false,
+              axisLine: {show: false},
+              axisTick: {show: false},
+            },
+            {...this.configureYAxis(), gridIndex: 1, max: 80},
+          ]}
           tooltip={{valueFormatter: this.formatTooltipValue}}
           onLegendSelectChanged={this.handleLegendSelectChanged}
           transformSinglePointToBar

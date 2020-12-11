@@ -13,6 +13,7 @@ import {ReleaseStatsRequestRenderProps} from '../releaseStatsRequest';
 
 import HealthChart from './healthChart';
 import {YAxis} from './releaseChartControls';
+import {previous} from './temp';
 
 type Props = Omit<
   ReleaseStatsRequestRenderProps,
@@ -76,7 +77,10 @@ class ReleaseChartContainer extends React.Component<Props, State> {
               <TransparentLoadingMask visible={reloading} />
               <HealthChart
                 utc={utc}
-                timeseriesData={chartData}
+                timeseriesData={[
+                  ...previous.map(s => ({...s, yAxisIndex: 1, xAxisIndex: 1})),
+                  ...chartData.map(s => ({...s, yAxisIndex: 0, xAxisIndex: 0})),
+                ]}
                 zoomRenderProps={zoomRenderProps}
                 reloading={reloading}
                 yAxis={yAxis}

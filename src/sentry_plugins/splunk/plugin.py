@@ -19,7 +19,7 @@ import logging
 import six
 from requests.exceptions import ConnectTimeout, ReadTimeout
 
-from sentry import http, tagstore
+from sentry import tagstore
 from sentry.utils import metrics
 from sentry.utils.hashlib import md5_text
 
@@ -29,6 +29,7 @@ from sentry_plugins.utils import get_secret_field_config
 from sentry_plugins.anonymizeip import anonymize_ip
 from sentry.integrations import FeatureDescription, IntegrationFeatures
 
+from .client import SplunkApiClient
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,9 @@ class SplunkPlugin(CorePluginMixin, DataForwardingPlugin):
     def get_rate_limit(self):
         # number of requests, number of seconds (window)
         return (1000, 1)
+
+    def get_client(self):
+        return SplunkApiClient(self.project_instance, self.project_token)
 
     def get_config(self, project, **kwargs):
         return [
@@ -259,17 +263,12 @@ class SplunkPlugin(CorePluginMixin, DataForwardingPlugin):
         if self.host:
             payload["host"] = self.host
 
-        session = http.build_session()
+        client = self.get_client()
+
         try:
             # https://docs.splunk.com/Documentation/Splunk/7.2.3/Data/TroubleshootHTTPEventCollector
-            resp = session.post(
-                self.project_instance,
-                json=payload,
-                # Splunk cloud instances certifcates dont play nicely
-                verify=False,
-                headers={"Authorization": "Splunk {}".format(self.project_token)},
-                timeout=5,
-            )
+            resp = client.request(payload)
+
             if resp.status_code != 200:
                 raise SplunkError.from_response(resp)
 

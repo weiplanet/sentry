@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - releases/**
+      - anton/**
   pull_request:
 
 jobs:

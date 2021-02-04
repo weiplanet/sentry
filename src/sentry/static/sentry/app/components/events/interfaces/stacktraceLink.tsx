@@ -4,7 +4,10 @@ import styled from '@emotion/styled';
 import {openModal} from 'app/actionCreators/modal';
 import AsyncComponent from 'app/components/asyncComponent';
 import Button from 'app/components/button';
-import {t} from 'app/locale';
+import ExternalLink from 'app/components/links/externalLink';
+import {IconOpen} from 'app/icons';
+import {t, tct} from 'app/locale';
+import space from 'app/styles/space';
 import {
   Frame,
   Integration,
@@ -60,15 +63,25 @@ class StacktraceLink extends AsyncComponent<Props, State> {
   }
 
   get errorText() {
-    const error = this.match.error;
+    const {config, error} = this.match;
 
     switch (error) {
       case 'stack_root_mismatch':
         return t('Error matching your configuration, check your stack trace root.');
       case 'file_not_found':
-        return t(
-          'Could not find source file, check your repository and source code root.'
-        );
+        return tct(`Could not find source file, check our [link].`, {
+          link: (
+            <ExternalLink
+              href={`https://docs.sentry.io/product/integrations/${config?.provider.key}/#stack-trace-linking-1`}
+              openInNewTab
+            >
+              <span>
+                {t('troubleshooting docs')}
+                <StyledIconOpen size="xs" />
+              </span>
+            </ExternalLink>
+          ),
+        }); // TODO Nisanthan: add the icon that goes to the docs.
       default:
         return t('There was an error encountered with the code mapping for this project');
     }
@@ -138,9 +151,9 @@ class StacktraceLink extends AsyncComponent<Props, State> {
     this.reloadData();
   }
 
-  // let the ErrorBoundary handle errors by raising it
+  // Do not show the component if there is an error from the endpoint.
   renderError(): React.ReactNode {
-    throw new Error('Error loading endpoints');
+    return null;
   }
 
   renderLoading() {
@@ -152,7 +165,6 @@ class StacktraceLink extends AsyncComponent<Props, State> {
     const {organization} = this.props;
     const filename = this.props.frame.filename;
     const platform = this.props.event.platform;
-
     if (this.project && this.integrations.length > 0 && filename) {
       return (
         <CodeMappingButtonContainer columnQuantity={2}>
@@ -194,17 +206,9 @@ class StacktraceLink extends AsyncComponent<Props, State> {
   }
 
   renderMatchNoUrl() {
-    const {config} = this.match;
-    const {organization} = this.props;
     const text = this.errorText;
-    const url = `/settings/${organization.slug}/integrations/${config?.provider.key}/${config?.integrationId}/?tab=codeMappings`;
     return (
-      <CodeMappingButtonContainer columnQuantity={2}>
-        {text}
-        <Button onClick={() => this.onReconfigureMapping()} to={url} size="xsmall">
-          {t('Configure Stack Trace Linking')}
-        </Button>
-      </CodeMappingButtonContainer>
+      <CodeMappingButtonContainer columnQuantity={2}>{text}</CodeMappingButtonContainer>
     );
   }
   renderMatchWithUrl(config: RepositoryProjectPathConfig, url: string) {
@@ -227,8 +231,10 @@ class StacktraceLink extends AsyncComponent<Props, State> {
     if (config) {
       return this.renderMatchNoUrl();
     }
-
-    return this.renderNoMatch();
+    if (this.match.error) {
+      return this.renderNoMatch();
+    }
+    return null;
   }
 }
 
@@ -237,4 +243,8 @@ export {StacktraceLink};
 
 export const CodeMappingButtonContainer = styled(OpenInContainer)`
   justify-content: space-between;
+`;
+
+const StyledIconOpen = styled(IconOpen)`
+  margin-left: ${space(0.5)};
 `;

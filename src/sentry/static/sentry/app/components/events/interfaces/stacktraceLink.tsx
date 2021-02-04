@@ -81,7 +81,7 @@ class StacktraceLink extends AsyncComponent<Props, State> {
               </span>
             </ExternalLink>
           ),
-        }); // TODO Nisanthan: add the icon that goes to the docs.
+        });
       default:
         return t('There was an error encountered with the code mapping for this project');
     }

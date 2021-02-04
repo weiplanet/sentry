@@ -1,3 +1,5 @@
+from typing import Any, MutableMapping, Optional
+
 import six
 from django.conf import settings
 
@@ -80,13 +82,17 @@ def get_kafka_producer_cluster_options(cluster_name):
     return _get_kafka_cluster_options(cluster_name, PRODUCERS_SECTION)
 
 
-def get_kafka_consumer_cluster_options(cluster_name, override_params=None):
+def get_kafka_consumer_cluster_options(
+    cluster_name: str, override_params: Optional[MutableMapping[str, Any]] = None
+) -> MutableMapping[Any, Any]:
     return _get_kafka_cluster_options(
         cluster_name, CONSUMERS_SECTION, only_bootstrap=True, override_params=override_params
     )
 
 
-def get_kafka_admin_cluster_options(cluster_name, override_params=None):
+def get_kafka_admin_cluster_options(
+    cluster_name: str, override_params: Optional[MutableMapping[str, Any]] = None
+) -> MutableMapping[Any, Any]:
     return _get_kafka_cluster_options(
         cluster_name, ADMIN_SECTION, only_bootstrap=True, override_params=override_params
     )

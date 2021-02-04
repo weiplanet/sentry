@@ -6,9 +6,10 @@
 from simplejson import JSONEncoder, JSONDecodeError, _default_decoder  # NOQA
 from enum import Enum
 import datetime
-import uuid
-import six
 import decimal
+import six
+import typing as t
+import uuid
 
 from bitfield.types import BitHandler
 from django.utils.encoding import force_text
@@ -110,7 +111,7 @@ def load(fp, **kwargs):
     return loads(fp.read())
 
 
-def loads(value, **kwargs):
+def loads(value: str, **kwargs) -> t.Any:
     return _default_decoder.decode(value)
 
 

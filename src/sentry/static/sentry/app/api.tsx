@@ -5,53 +5,52 @@ import Cookies from 'js-cookie';
 import isUndefined from 'lodash/isUndefined';
 
 import {openSudo, redirectToProject} from 'app/actionCreators/modal';
+import {CSRF_COOKIE_NAME, EXPERIMENTAL_SPA} from 'app/constants';
 import {
   PROJECT_MOVED,
   SUDO_REQUIRED,
   SUPERUSER_REQUIRED,
 } from 'app/constants/apiErrorCodes';
-import ajaxCsrfSetup from 'app/utils/ajaxCsrfSetup';
 import {metric} from 'app/utils/analytics';
 import {run} from 'app/utils/apiSentryClient';
+import getCookie from 'app/utils/getCookie';
 import {uniqueId} from 'app/utils/guid';
 import createRequestError from 'app/utils/requestError/createRequestError';
-
-import {EXPERIMENTAL_SPA} from './constants';
 
 export class Request {
   /**
    * Is the request still in flight
    */
   alive: boolean;
-  xhr: JQueryXHR;
+  /**
+   * Promise which will be resolved when the request has completed
+   */
+  requestPromise: Promise<Response>;
+  /**
+   * AbortController to cancel the in-flight request
+   */
+  aborter: AbortController;
 
-  constructor(xhr: JQueryXHR) {
-    this.xhr = xhr;
+  constructor(requestPromise: Promise<Response>, aborter: AbortController) {
+    this.requestPromise = requestPromise;
+    this.aborter = aborter;
     this.alive = true;
   }
 
   cancel() {
     this.alive = false;
-    this.xhr.abort();
+    this.aborter.abort();
     metric('app.api.request-abort', 1);
   }
 }
 
 /**
  * Setup the CSRF + other client early initalization.
+ *
+ * TODO(epurkhiser): This can be removed now that we are using fetch
  */
 export function initApiClient() {
-  jQuery.ajaxSetup({
-    // jQuery won't allow using the ajaxCsrfSetup function directly
-    beforeSend: ajaxCsrfSetup,
-    // Completely disable evaluation of script responses using jQuery ajax
-    // Typically the `text script` converter will eval the text [1]. Instead we
-    // just immediately return.
-    // [1]: https://github.com/jquery/jquery/blob/8969732518470a7f8e654d5bc5be0b0076cb0b87/src/ajax/script.js#L39-L42
-    converters: {
-      'text script': (value: any) => value,
-    },
-  });
+  // NOOP now
 }
 
 // TODO: Need better way of identifying anonymous pages that don't trigger redirect
@@ -62,8 +61,10 @@ const ALLOWED_ANON_PAGES = [
   /^\/join-request\//,
 ];
 
-export function initApiClientErrorHandling() {
-  jQuery(document).ajaxError(function (_evt, jqXHR) {
+const globalErrorHandlers: ((jqXHR: JQueryXHR) => void)[] = [];
+
+export const initApiClientErrorHandling = () =>
+  globalErrorHandlers.push((jqXHR: JQueryXHR) => {
     const pageAllowsAnon = ALLOWED_ANON_PAGES.find(regex =>
       regex.test(window.location.pathname)
     );
@@ -97,7 +98,6 @@ export function initApiClientErrorHandling() {
       window.location.reload();
     }
   });
-}
 
 /**
  * Construct a full request URL
@@ -145,7 +145,7 @@ function buildRequestUrl(baseUrl: string, path: string, query: RequestOptions['q
  * user to new project slug
  */
 // TODO: refine this type later
-function hasProjectBeenRenamed(response: JQueryXHR) {
+export function hasProjectBeenRenamed(response: JQueryXHR) {
   const code = response?.responseJSON?.detail?.code;
 
   // XXX(billy): This actually will never happen because we can't intercept the 302
@@ -386,20 +386,74 @@ export class Client {
         true
       )(jqXHR, textStatus);
 
-    const xhrRequest = jQuery.ajax({
-      url: fullUrl,
-      method,
-      data,
-      contentType: 'application/json',
-      headers: {
-        Accept: 'application/json; charset=utf-8',
-      },
-      success: successHandler,
-      error: errorHandler,
-      complete: completeHandler,
+    const aborter = new AbortController();
+
+    // GET requests may not have a body
+    const body = method !== 'GET' ? data : undefined;
+
+    const headers = new Headers({
+      Accept: 'application/json; charset=utf-8',
+      'Content-Type': 'application/json',
+      // TODO: This is not good enough, see ajaxCsrfSetup for what we really
+      // need to do
+      'X-CSRFToken': getCookie(CSRF_COOKIE_NAME) ?? '',
     });
 
-    const request = new Request(xhrRequest);
+    const fetchRequest = fetch(fullUrl, {
+      method,
+      body,
+      headers,
+      credentials: 'same-origin',
+      signal: aborter.signal,
+    });
+
+    // XXX(epurkhiser): We're migrating off of jquery, so for now we have a
+    // compatability layer which mimics that of the jquery response objects.
+    fetchRequest
+      .then(async response => {
+        let responseJSON: any;
+        let responseText: any;
+
+        // Try to get JSON out of the response no matter the status
+        try {
+          responseJSON = await response.json();
+        } catch {
+          // No json came out.. too bad
+        }
+
+        // Try to get text out of the response no matter the status
+        try {
+          responseText = await response.text();
+        } catch {
+          // No text came out.. too bad
+        }
+
+        const {ok, status, statusText} = response;
+
+        const emulatedJQueryXHR: any = {
+          status,
+          statusText,
+          responseJSON,
+          responseText,
+          getResponseHeader: (header: string) => response.headers.get(header),
+        };
+
+        if (ok) {
+          successHandler(responseJSON, statusText, emulatedJQueryXHR);
+        } else {
+          globalErrorHandlers.forEach(handler => handler(emulatedJQueryXHR));
+          errorHandler(emulatedJQueryXHR, statusText, 'TODO');
+        }
+
+        completeHandler(emulatedJQueryXHR, statusText);
+      })
+      .catch(reason => {
+        // TODO This also includes aborted requests.. have to figure out what to do in here
+        // eslint-disable-next-line no-console
+        console.log(`Caught fetch with reason: ${reason}`);
+      });
+
+    const request = new Request(fetchRequest, aborter);
     this.activeRequests[id] = request;
 
     return request;

@@ -60,6 +60,17 @@ def is_recursion_v1(frame1, frame2):
     return True
 
 
+def get_package_component(package, platform):
+    if package is None or platform != "native":
+        return GroupingComponent(id="package")
+
+    package = _basename_re.split(package)[-1].lower()
+    package_component = GroupingComponent(
+        id="package", values=[package], similarity_encoder=ident_encoder
+    )
+    return package_component
+
+
 def get_filename_component(abs_path, filename, platform, allow_file_origin=False):
     """Attempt to normalize filenames by detecting special filenames and by
     using the basename only.
@@ -221,7 +232,7 @@ def get_function_component(
 
 
 @strategy(
-    ids=["frame:v1", "frame:v2", "frame:v3", "frame:v4"],
+    ids=["frame:v1", "frame:v2", "frame:v3", "frame:v4", "frame:v5"],
     interfaces=["frame"],
     variants=["!system", "app"],
 )
@@ -229,6 +240,7 @@ def frame(frame, event, **meta):
     id = meta["strategy"].id
     platform = frame.platform or event.platform
 
+    use_package_fallback = False
     use_contextline = False
     javascript_fuzzing = False
     php_detect_anonymous_classes = False
@@ -247,7 +259,7 @@ def frame(frame, event, **meta):
     # for csharp.
     prefer_raw_function_name = platform == "csharp"
 
-    if id in ("frame:v3", "frame:v4"):
+    if id in ("frame:v3", "frame:v4", "frame:v5"):
         javascript_fuzzing = True
         # These are platforms that we know have always source available and
         # where the source is of good quality for grouping.  For javascript
@@ -256,8 +268,11 @@ def frame(frame, event, **meta):
 
     # Starting with v4 we're adding support for anonymous classes
     # detection
-    if id == "frame:v4":
+    if id in ("frame:v4", "frame:v5"):
         php_detect_anonymous_classes = True
+
+    if id in ("frame:v5"):
+        use_package_fallback = True
 
     return get_frame_component(
         frame,
@@ -269,6 +284,7 @@ def frame(frame, event, **meta):
         with_context_line_file_origin_bug=with_context_line_file_origin_bug,
         php_detect_anonymous_classes=php_detect_anonymous_classes,
         prefer_raw_function_name=prefer_raw_function_name,
+        use_package_fallback=use_package_fallback,
     )
 
 
@@ -310,6 +326,7 @@ def get_frame_component(
     with_context_line_file_origin_bug=False,
     php_detect_anonymous_classes=False,
     prefer_raw_function_name=False,
+    use_package_fallback=False,
 ):
     platform = frame.platform or event.platform
 
@@ -354,6 +371,10 @@ def get_frame_component(
     values = [module_component, filename_component, function_component]
     if context_line_component is not None:
         values.append(context_line_component)
+
+    if use_package_fallback and all(component.is_empty() for component in values):
+        package_component = get_package_component(package=frame.package, platform=platform)
+        values.append(package_component)
 
     rv = GroupingComponent(id="frame", values=values)
 

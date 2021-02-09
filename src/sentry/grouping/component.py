@@ -174,3 +174,6 @@ class GroupingComponent:
             self.contributes,
             self.values,
         )
+
+    def is_empty(self):
+        return len(self.values) == 0

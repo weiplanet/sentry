@@ -166,3 +166,15 @@ register_strategy_config(
     """,
     hidden=True,
 )
+
+
+register_strategy_config(
+    id="nativeunknown:2021-02-09",
+    base="newstyle:2019-10-29",
+    delegates=["frame:v5"],
+    risk=RISK_LEVEL_HIGH,
+    changelog="""
+        * Initial version
+    """,
+    hidden=True,
+)

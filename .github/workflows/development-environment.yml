@@ -52,6 +52,7 @@ jobs:
 
       - name: Install Python (via Pyenv)
         id: python-version
+        shell: bash
         # XXX: Can we cache the installed Python environments?
         run: |
           make setup-pyenv
@@ -86,6 +87,7 @@ jobs:
             ${{ runner.os }}-yarn-
 
       - name: Set up development environment (as per docs)
+        shell: bash
         # XXX: I don't understand why we need to source again when we already do in a previous step
         run: |
           python -V

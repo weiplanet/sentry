@@ -21,7 +21,7 @@ get_shell_startup_script() {
   if [ -n "$SHELL" ]; then
     case "$SHELL" in
       /bin/bash)
-        echo "${HOME}/.bash_profile"
+        echo "${HOME}/.bashrc"
         ;;
       /bin/zsh)
         echo "${HOME}/.zshrc"
